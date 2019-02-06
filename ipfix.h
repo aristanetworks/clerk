@@ -73,6 +73,7 @@ class IPFIX : public State {
   void SwapFlows(flow::Table* f) { f->swap(flows_); }
 
  private:
+  friend class FlowGenerator;
   flow::Table flows_;
   const IPFIXFactory* factory_;
 

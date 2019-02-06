@@ -69,11 +69,18 @@ class SelfConstructorFactory : public StateFactory {
   }
 };
 
+class Processor {
+ public:
+  virtual ~Processor() {};
+  virtual void StartThreads() = 0;
+  virtual void Gather(std::vector<std::unique_ptr<State>>* states, bool last) = 0;
+};
+
 class TestimonyThread;
 
 // TestimonyProcessor runs TestimonyThreads and gathers states from
 // them.
-class TestimonyProcessor {
+class TestimonyProcessor : public Processor {
  public:
   TestimonyProcessor(const string& socket, const StateFactory* states);
   virtual ~TestimonyProcessor();
