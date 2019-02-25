@@ -21,7 +21,7 @@ SHARED_LIBS=-ltestimony -lglog -lgflags -lcityhash -lpthread
 TEST_LIBS=-lgtest
 STATIC_LIBS=/usr/lib/x86_64-linux-gnu/libglog.a /usr/lib/libtestimony.a /usr/local/lib/libcityhash.a /usr/lib/x86_64-linux-gnu/libgflags.a
 
-OBJECTS=flow.o headers.o ipfix.o send.o testimony.o util.o asn_map.o
+OBJECTS=flow.o headers.o ipfix.o send.o testimony.o util.o asn_map.o generator.o
 TESTS=flow_test.o headers_test.o send_test.o asn_map_test.o
 
 all: clerk

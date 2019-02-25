@@ -22,10 +22,12 @@
 #include "asn_map.h"
 #include "ipfix.h"
 #include "testimony.h"
+#include "generator.h"
 
 #include "util.h"
 
 using google::ParseCommandLineFlags;
+using google::RegisterFlagValidator;
 
 DEFINE_string(testimony, "", "Name of testimony socket");
 DEFINE_string(collector, "127.0.0.1:6555", "Socket address of collector");
@@ -36,6 +38,24 @@ DEFINE_string(asns_csv, "",
               "data readable by clerk.");
 DEFINE_double(asns_reread_every_secs, 86400,
               "Reread ASN CSV file once every X seconds");
+DEFINE_int32(num_hosts, 10, "Number of hosts to simulate");
+DEFINE_int32(num_flows_per_host, 10, "Number of flows per host to simulate");
+
+static bool ValidateNumHosts(const char* flagname, int32_t num_hosts) {
+   if (num_hosts >= 1 && num_hosts <= 1000000) {
+      return true;
+   }
+   printf("Number of hosts should be <= 1,000,000\n");
+   return false;
+}
+
+static bool ValidateNumFlowsPerHost(const char* flagname, int32_t num_flows) {
+   if (num_flows >= 1 && num_flows <= 1000000) {
+      return true;
+   }
+   printf("Number of flows per host should be <= 1,000,000\n");
+   return false;
+}
 
 // CombineGather parallelizes the process of combining multiple IPFIX states
 // together, by synchronously combining half of them with the other half, until
@@ -119,12 +139,16 @@ void ReadASNs(clerk::ASNMap* map) {
 }
 
 int main(int argc, char** argv) {
+  RegisterFlagValidator(&FLAGS_num_hosts, &ValidateNumHosts);
+  RegisterFlagValidator(&FLAGS_num_flows_per_host, &ValidateNumFlowsPerHost);
   ParseCommandLineFlags(&argc, &argv, true);
   clerk::ASNMap asns;
   ReadASNs(&asns);
   double last_asn_read_secs = GetCurrentTimeSeconds();
 
   clerk::IPFIXFactory factory;
+
+  srand(time(NULL));
 
   std::unique_ptr<clerk::Sender> sender;
   if (FLAGS_collector == "stdout") {
@@ -139,9 +163,16 @@ int main(int argc, char** argv) {
     sender.reset(new clerk::PacketSender(fd, &factory));
   }
 
-  clerk::TestimonyProcessor processor(FLAGS_testimony, &factory);
+  clerk::Processor* processor;
+  if (FLAGS_testimony != "") {
+     processor = new clerk::TestimonyProcessor(FLAGS_testimony, &factory);
+  } else {
+     processor = new clerk::FlowGenerator(FLAGS_upload_every_secs,
+           FLAGS_flow_timeout_secs, FLAGS_num_hosts, FLAGS_num_flows_per_host,
+           &factory);
+  }
   double last_upload_secs = GetCurrentTimeSeconds();
-  processor.StartThreads();
+  processor->StartThreads();
   while (1) {
     SleepForSeconds(last_upload_secs + FLAGS_upload_every_secs -
                     GetCurrentTimeSeconds());
@@ -149,7 +180,7 @@ int main(int argc, char** argv) {
     factory.SetCutoffNanos((last_upload_secs - FLAGS_flow_timeout_secs) *
                            kNumNanosPerSecond);
     std::vector<std::unique_ptr<clerk::State>> states;
-    processor.Gather(&states, false);
+    processor->Gather(&states, false);
     CombineGather(&states);
     clerk::IPFIX* first = reinterpret_cast<clerk::IPFIX*>(states[0].get());
     clerk::flow::Table f;
@@ -161,4 +192,6 @@ int main(int argc, char** argv) {
       ReadASNs(&asns);
     }
   }
+
+  delete processor;
 }
